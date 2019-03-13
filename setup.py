@@ -10,7 +10,7 @@ setuptools.setup(
     install_requires=[
         'requests',
         'docker',
-        'jupyter-repo2docker>=0.7',
+        'jupyter-repo2docker==0.7',
     ],
     entry_points={
         'console_scripts': [

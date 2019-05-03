@@ -15,12 +15,14 @@ deployments/
       - staging.yaml
       - prod.yaml
 """
-import itertools
-import subprocess
-from hubploy import gitutils
-import os
 import argparse
+import itertools
+import os
 import shutil
+import subprocess
+
+from hubploy import gitutils
+from hubploy.config import get_config
 
 
 def helm_upgrade(
@@ -61,7 +63,7 @@ def deploy(
     chart,
     environment,
     namespace=None,
-    config_overrides=None,
+    helm_config_overrides=None,
     version=None,
 ):
     """
@@ -84,14 +86,16 @@ def deploy(
     `jupyterhub.singleuser.image.tag` will be automatically set to this image
     tag.
     """
-    if config_overrides is None:
-        config_overrides = []
+    if helm_config_overrides is None:
+        helm_config_overrides = []
+
+    config = get_config(deployment)
 
     name = f'{deployment}-{environment}'
 
     if namespace is None:
         namespace = name
-    config_files = [f for f in [
+    helm_config_files = [f for f in [
         os.path.join('deployments', deployment, 'config', 'common.yaml'),
         os.path.join('deployments', deployment, 'config', f'{environment}.yaml'),
         os.path.join('deployments', deployment, 'secrets', f'{environment}.yaml'),
@@ -103,13 +107,23 @@ def deploy(
             os.path.join('deployments', deployment, 'image')
         )
 
-        config_overrides.append(f'jupyterhub.singleuser.image.tag={image_tag}')
+        # We can support other charts that wrap z2jh by allowing various
+        # config paths where we set image tags and names.
+        # We default to one sublevel, but we can do multiple levels.
+        # With the PANGEO chart, we this could be set to `pangeo.jupyterhub.singleuser.image`
+        image_config_path = config.get('images', {}).get('image_config_path', 'jupyterhub.singleuser.image')
+        helm_config_overrides.append(f'{image_config_path}.tag={image_tag}')
+
+        if 'images' in config:
+            image_name = config['images'].get('image_name')
+            if image_name:
+                helm_config_overrides.append(f'{image_config_path}.name={image_name}')
 
     helm_upgrade(
         name,
         namespace,
         chart,
-        config_files,
-        config_overrides,
+        helm_config_files,
+        helm_config_overrides,
         version
     )
